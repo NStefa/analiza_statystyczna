@@ -1,0 +1,549 @@
+---
+title: "Raport zaliczeniowy"
+subtitle: "statystyka nieparametryczna"
+author: "Natalia Stefańska"
+date: "2025-05-25"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    highlight: tango
+fontsize: 11pt
+mainfont: "Linux Libertine O"
+geometry: margin=2.3cm
+lang: pl
+linestretch: 1.5
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stats)
+library(PMCMRplus)
+library(coin)
+```
+\newpage
+
+# Opis danych
+
+Dane dotyczą zawartości wody (wyrażonej w procentach) w dwóch rodzajach sera topionego: typu "A" oraz "B", w zależności od czasu przechowywania (dojrzewania). Pomiary zostały przeprowadzone w trzech punktach czasowych - w tygodniu 0 (początek badania), tygodniu 3 oraz tygodniu 5. Dla każdego typu sera zbadano pięć próbek w każdym punkcie czasowym. 
+
+```{r echo=FALSE}
+# wpisanie danych
+s0_A <- c(42.3, 42.5, 41.0, 40.8, 42.4)
+
+s3_A <- c(38.7, 38.1, 39.3, 37.7, 39.0)
+
+s5_A <- c(39.4, 36.5, 36.3, 36.3, 36.6)
+
+s0_B <- c(41.4, 40.1, 41.5, 41.6, 39.9)
+
+s3_B <- c(39.9, 38.2, 37.7, 37.9, 37.2)
+
+s5_B <- c(38.2, 37.4, 35.1, 35.2, 34.5)
+
+# ramka danych tylko dla sera A
+dane_ser_A <- data.frame(matrix(c(s0_A, s3_A, s5_A), ncol = 3))
+
+colnames(dane_ser_A) <- c("tydzien0", "tydzien3", "tydzien5")
+
+# ramka danych tylko dla sera B
+dane_ser_B <- data.frame(matrix(c(s0_B, s3_B, s5_B), ncol = 3))
+
+colnames(dane_ser_B) <- c("tydzien0", "tydzien3", "tydzien5")
+
+# zebrane dane 
+dane <- rbind(dane_ser_A, dane_ser_B)
+dane[,4] <- rep(c("A", "B"), each = 5)
+colnames(dane) <- c("tydzien0", "tydzien3", "tydzien5", "typ_sera")
+dane$id <- rep(1:5, times = 2)  # dodaj id
+
+# zebrane dane z podziałem na typy serów i tygodnie
+dane_long <- pivot_longer(
+  dane,
+  cols = starts_with("tydzien"),
+  names_to = "tydzien",
+  values_to = "wartość"
+)
+
+# tabele z danymi
+kable(dane_ser_A, caption = 'Dane dla sera typu "A"', align = "c")
+
+kable(dane_ser_B, caption = 'Dane dla sera typu "B"', align = "c")
+
+```
+
+## Charakterystyka danych
+
+Dane składają się z dwóch prób niezależnych - próby dotyczącej sera typu "A" oraz próby dotyczącej sera typu "B". W każdej grupie zbadano 5 próbek sera w 3 punktach czasowych - `tydzien0`, `tydzien3`, `tydzien5` - odpowiednio na początku badania, po 3 tygodniach od rozpoczęcia oraz po 5 tygodniach od rozpoczęcia. 
+
+Dane pochodzą z układu z powtarzanymi pomiarami, natomiast analizowana zmienna ***(zawartość wody)*** jest zmienną ilościową w skali interwałowej.
+
+```{r echo=FALSE}
+# statystyki opisowe
+sum_A <- summary(dane_ser_A)
+sum_B <- summary(dane_ser_B)
+
+kable(sum_A, caption = 'Statystyki opisowe dla sera typu "A"', align = "c")
+
+kable(sum_B, caption = 'Statystyki opisowe dla sera typu "B"', align = "c")
+
+sum_dane <- summary(dane[,1:3])
+kable(sum_dane, caption = "Statystyki opisowe dla każdego tygodnia - bez podziału na typy serów", align = "c")
+
+sd_A <- sapply(dane_ser_A, sd)
+sd_B <- sapply(dane_ser_B, sd)
+
+sd_razem <- rbind(sd_A, sd_B)
+kable(sd_razem, caption = 'Odchylenia standardowe dla każdego tygodnia - dla sera typu "A" oraz dla sera typu "B"', align = "c")
+
+```
+
+W tabelach powyżej przedstawiono statystyki opisowe - minimum, maksimum, kwartyle, średnie oraz odchylenia standardowe zawartości wody dla każdego rodzaju sera w poszczególnych tygodniach. Dane wskazują na systematyczny spadek zawartości wody w czasie, którego istotność zostanie zweryfikowana przy użyciu odpowiednich testów statystycznych.
+  
+\newpage 
+
+## Wizualizacja danych
+
+```{r echo=FALSE, fig.height= 6, fig.width=10, fig.align='center'}
+boxplot(dane_ser_A, main = 'Wykres pudełkowy dla danych dotyczących sera typu "A"', col = c("lightblue", "plum", "palegreen3"), ylab = "Zawartość wody (%)", xlab = "Tydzień pomiaru")
+boxplot(dane_ser_B, main = 'Wykres pudełkowy dla danych dotyczących sera typu "B"', col = c("lightblue", "plum", "palegreen3"), ylab = "Zawartość wody (%)", xlab = "Tydzień pomiaru")
+```
+
+Na wykresach pudełkowych przedstawiono rozkład zawartości wody dla serów typu "A" i "B" w trzech punktach czasowych. Widoczna jest tendencja spadkowa, szczególnie wyraźna między tygodniem 0 a tygodniem 5. W obu grupach obserwuje się obniżenie median zawartości wody, co sugeruje postępujący proces odwodnienia w trakcie przechowywania.
+
+
+```{r echo=FALSE, fig.height= 8, fig.width=10, fig.align='center'}
+dane_long %>% 
+  ggplot(aes(x = tydzien, y = wartość, color = typ_sera)) +
+  geom_point(size=3) +
+  ggtitle("Wykres punktowy zawartości procentowej wody w każdym tygodniu pomiaru") +
+  ylab("Zawartość wody (%)")+
+  xlab("Tydzień pomiaru")+
+  theme_light()
+```
+
+Na wspólnym wykresie punktowym przedstawiono zawartość procentową wody w serach typu "A" i "B", przy czym kolor punktów wskazuje na typ sera.
+
+```{r echo=FALSE, fig.height= 4, fig.width=10, fig.align='center'}
+ggplot(dane, aes(x = tydzien0, y = tydzien3)) +
+  geom_point(color = "steelblue", size = 3) +
+  labs(
+    title = "Zależność między zawartością wody w tygodniu 0 a 3",
+    x = "Zawartość wody w tygodniu 0 (%)",
+    y = "Zawartość wody w tygodniu 3 (%)"
+  ) +
+  scale_x_continuous(limits = c(37, 43), breaks = seq(37, 43, 1)) +
+  scale_y_continuous(limits = c(34, 40), breaks = seq(34, 40, 1)) +
+  theme_minimal()
+
+ggplot(dane, aes(x = tydzien0, y = tydzien5)) +
+  geom_point(color = "steelblue", size = 3) +
+  labs(
+    title = "Zależność między zawartością wody w tygodniu 0 a 5",
+    x = "Zawartość wody w tygodniu 0 (%)",
+    y = "Zawartość wody w tygodniu 5 (%)"
+  ) +
+  scale_x_continuous(limits = c(37, 43), breaks = seq(37, 43, 1)) +
+  scale_y_continuous(limits = c(34, 40), breaks = seq(34, 40, 1)) +
+  theme_minimal()
+
+ggplot(dane, aes(x = tydzien3, y = tydzien5)) +
+  geom_point(color = "steelblue", size = 3) +
+  labs(
+    title = "Zależność między zawartością wody w tygodniu 3 a 5",
+    x = "Zawartość wody w tygodniu 3 (%)",
+    y = "Zawartość wody w tygodniu 5 (%)"
+  ) +
+  scale_x_continuous(limits = c(37, 43), breaks = seq(37, 43, 1)) +
+  scale_y_continuous(limits = c(34, 40), breaks = seq(34, 40, 1)) +
+  theme_minimal()
+
+```
+
+# Weryfikowane cele badawcze
+
+## Czy przechowywanie sera "A" wpływa istotnie na zmniejszenie się w nim zawartości wody?
+
+Pomiar zawartości wody prowadzono na tych samych pięciu próbkach sera w trzech momentach czasowych, co oznacza, że dane pochodzą z układu z powtarzanymi pomiarami (próby zależne).
+
+**Sformułowanie problemu w postaci hipotez**
+
+$H_0$: rozkłady zawartości wody w tygodniach 0, 3 i 5 dla sera "A" są identyczne
+
+$H_1$: przynajmniej jeden z rozkładów różni się od pozostałych
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $F_{tydzien0} = F_{tydzien3} = F_{tydzien5}$ 
+
+$H_1$: $\exists_{i \ne j} \ F_{tydzien\ i} \not= F_{tydzien \ j}$ 
+
+```{r echo=FALSE}
+friedman_p <- friedman.test(y = as.matrix(dane_ser_A), groups = NULL, blocks = NULL)$p.value
+
+dane_long_A <- dane_long %>%
+  filter(typ_sera == "A") %>%
+  arrange(id, tydzien)
+
+w03_p <- wilcox.test(dane_ser_A$tydzien0, dane_ser_A$tydzien3, alternative="greater", paired = TRUE, exact = TRUE, correct = FALSE)$p.value
+
+w05_p <-wilcox.test(dane_ser_A$tydzien0, dane_ser_A$tydzien5, alternative="greater", paired = TRUE, exact = TRUE, correct = FALSE)$p.value
+
+w35_p <-wilcox.test(dane_ser_A$tydzien3, dane_ser_A$tydzien5, alternative="greater", paired = TRUE, exact = TRUE, correct = FALSE)$p.value
+
+wynik_par <- adAllPairsTest(as.vector(as.matrix(dane_ser_A)), g = rep(c(0, 3, 5), each = 5))$p.value
+
+```
+
+
+**Przeprowadzony test**: `friedman.test`
+
+  - otrzymana $p$-wartość: `r friedman_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: występują istotne różnice w rozkładach zawartości procentowej wody w serze typu "A" między tygodniami
+  
+**Sformułowanie nowego problemu w postaci hipotez**
+
+$H_0$: mediana różnic zawartości wody w tygodniu $i$ oraz tygodniu $j$ dla sera "A" jest równa 0  
+
+$H_1$: mediana różnic zawartości wody w tygodniu $i$ oraz tygodniu $j$ dla sera "A" jest większa od 0  
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $Me(X_i - X_j) = 0$ 
+
+$H_1$: $Me(X_i - X_j) > 0$ 
+
+\newpage
+  
+**Przeprowadzone testy**: Test rangowanych znaków Wilcoxona (dla prób zależnych) - `wilcox.test`
+
+1. para między tygodniem 0 a tygodniem 3
+
+  - otrzymana $p$-wartość: `r w03_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 0 oraz 3 jest istotnie większa od 0
+
+2. para między tygodniem 0 a tygodniem 5
+
+  - otrzymana $p$-wartość: `r w05_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 0 oraz 5 jest istotnie większa od 0
+
+3. para między tygodniem 3 a tygodniem 5
+
+  - otrzymana $p$-wartość: `r w35_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 3 oraz 5 nie różni się istotnie od 0
+  
+**Przeprowadzony test**: Porównania parami przy użyciu testu Andersona-Darlinga dla wszystkich par - `adAllPairsTest`
+
+```{r echo=FALSE}
+kable(wynik_par, caption = 'p-wartości dla porównań parami przy użyciu testu Andersona-Darlinga', align = "c")
+
+```
+
+## Czy przechowywanie sera "B" wpływa istotnie na zmniejszenie się w nim zawartości wody?
+
+Pomiar zawartości wody prowadzono na tych samych pięciu próbkach sera w trzech momentach czasowych, co oznacza, że dane pochodzą z układu z powtarzanymi pomiarami (próby zależne).
+
+**Sformułowanie problemu w postaci hipotez**
+
+$H_0$: rozkłady zawartości wody w tygodniach 0, 3 i 5 dla sera "B" są identyczne
+
+$H_1$: przynajmniej jeden z rozkładów różni się od pozostałych
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $G_{tydzien0} = G_{tydzien3} = G_{tydzien5}$ 
+
+$H_1$: $\exists_{i \ne j} \ G_{tydzien\ i} \not= G_{tydzien \ j}$ 
+
+```{r echo=FALSE, warning=FALSE}
+friedman_p <- friedman.test(y = as.matrix(dane_ser_B), groups = NULL, blocks = NULL)$p.value
+
+w03_p <- wilcox.test(dane_ser_B$tydzien0, dane_ser_B$tydzien3, alternative="greater", paired = TRUE, exact = TRUE, correct = FALSE)$p.value
+
+w05_p <- wilcox.test(dane_ser_B$tydzien0, dane_ser_B$tydzien5, alternative="greater", paired = TRUE, exact = TRUE, correct = FALSE)$p.value
+
+w35_p <- wilcox.test(dane_ser_B$tydzien3, dane_ser_B$tydzien5, alternative="greater", paired = TRUE, exact = TRUE, correct = FALSE)$p.value
+
+wynik_par <- adAllPairsTest(as.vector(as.matrix(dane_ser_B)), g = rep(c(0, 3, 5), each = 5))$p.value
+
+```
+
+Przeprowadzony test: `friedman.test`
+
+  - otrzymana $p$-wartość: `r friedman_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: występują istotne różnice w rozkładach zawartości procentowej wody w serze typu "B" między tygodniami
+  
+**Sformułowanie nowego problemu w postaci hipotez**
+
+$H_0$: mediana różnic zawartości wody w tygodniu $i$ oraz $j$ dla sera "B" jest równa 0  
+
+$H_1$: mediana różnic zawartości wody w tygodniu $i$ oraz $j$ dla sera "B" jest większa od 0  
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $Me(Y_i - Y_j) = 0$ 
+
+$H_1$: $Me(Y_i - Y_j) > 0$ 
+
+\newpage
+  
+**Przeprowadzone testy**: Test rangowanych znaków Wilcoxona (dla prób zależnych) - `wilcox.test`
+
+1. para między tygodniem 0 a tygodniem 3
+
+  - otrzymana $p$-wartość: `r w03_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 0 oraz 3 jest istotnie większa od 0
+
+2. para między tygodniem 0 a tygodniem 5
+
+  - otrzymana $p$-wartość: `r w05_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 0 oraz 5 jest istotnie większa od 0
+
+3. para między tygodniem 3 a tygodniem 5
+
+  - otrzymana $p$-wartość: `r w35_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 3 oraz 5 jest istotnie większa od 0
+  
+**Przeprowadzony test**: Porównania parami przy użyciu testu Andersona-Darlinga dla wszystkich par - `adAllPairsTest`
+
+```{r echo=FALSE}
+kable(wynik_par, caption = 'p-wartości dla porównań parami przy użyciu testu Andersona-Darlinga', align = "c")
+
+```
+
+## Czy różnica w zawartości wody w terminach `tydzien0` i `tydzien3` jest istotna statystycznie?
+
+Test został wykonany na pełnym zbiorze danych, niezależnie od typu sera. Oznacza to, że wyniki nie uwzględniają potencjalnych różnic między typami "A" i "B".
+
+**Sformułowanie problemu w postaci hipotez**
+
+$H_0$: mediana różnic zawartości wody w tygodniu 0 oraz tygodniu 3 jest równa 0  
+
+$H_1$: mediana różnic zawartości wody w tygodniu 0 oraz tygodniu 3 jest różna od 0  
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $Me(X_0 - X_3) = 0$ 
+
+$H_1$: $Me(X_0 - X_3) \not= 0$ 
+
+
+```{r echo=FALSE}
+w03_p <- wilcox.test(dane_long[dane_long$tydzien=='tydzien0',]$wartość, dane_long[dane_long$tydzien == 'tydzien3',]$wartość, alternative = 'two.sided', paired = T)$p.value
+```
+
+**Przeprowadzony test**: Test rangowanych znaków Wilcoxona (dla prób zależnych) - `wilcox.test`
+
+  - otrzymana $p$-wartość: `r w03_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$ 
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 0 oraz 3 jest istotnie różna od 0
+
+## Czy różnica w zawartości wody w terminach `tydzien3` i `tydzien5` jest istotna statystycznie?
+
+Test został wykonany na pełnym zbiorze danych, niezależnie od typu sera. Oznacza to, że wyniki nie uwzględniają potencjalnych różnic między typami "A" i "B".
+
+**Sformułowanie problemu w postaci hipotez**
+
+$H_0$: mediana różnic zawartości wody w tygodniu 3 oraz tygodniu 5 jest równa 0  
+
+$H_1$: mediana różnic zawartości wody w tygodniu 3 oraz tygodniu 5 jest różna od 0  
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $Me(X_3 - X_5) = 0$ 
+
+$H_1$: $Me(X_3 - X_5) \not= 0$ 
+
+\newpage
+
+```{r echo=FALSE}
+w35_p <- wilcox.test(dane_long[dane_long$tydzien=='tydzien3',]$wartość, dane_long[dane_long$tydzien == 'tydzien5',]$wartość, alternative = 'two.sided', paired = T)$p.value
+```
+
+**Przeprowadzony test**: Test rangowanych znaków Wilcoxona (dla prób zależnych) - `wilcox.test`
+
+  - otrzymana $p$-wartość: `r w35_p` < 0.05
+  
+  - decyzja: odrzucenie $H_0$
+  
+  - wniosek: mediana różnic zawartości wody między tygodniem 3 oraz 5 jest istotnie różna od 0
+
+## Jakiego średniego procentu utraty wody można się spodziewać w terminach `tydzien3` i `tydzien5`?
+
+```{r echo=FALSE}
+utrata_S3_A <- (dane_ser_A$tydzien0 - dane_ser_A$tydzien3) / dane_ser_A$tydzien0 * 100
+utrata_S5_A <- (dane_ser_A$tydzien0 - dane_ser_A$tydzien5) / dane_ser_A$tydzien0 * 100
+utrata_S3_B <- (dane_ser_B$tydzien0 - dane_ser_B$tydzien3) / dane_ser_B$tydzien0 * 100
+utrata_S5_B <- (dane_ser_B$tydzien0 - dane_ser_B$tydzien5) / dane_ser_B$tydzien0 * 100
+
+utrata_od_0 <- cbind(rbind(mean(utrata_S3_A), mean(utrata_S5_A)), rbind(mean(utrata_S3_B), mean(utrata_S5_B)))
+utrata_od_0 <- data.frame(utrata_od_0)
+colnames(utrata_od_0) <- c('typ "A"', 'typ "B"')
+rownames(utrata_od_0) <- c('do 3 tygodnia', 'do 5 tygodnia')
+
+kable(utrata_od_0, caption = 'Średnia procentowa utrata wody od początku do tygodnia 3 oraz do tygodnia 5', align = "c")
+
+utrata35_A <- (dane_ser_A$tydzien3 - dane_ser_A$tydzien5) / dane_ser_A$tydzien3 * 100
+utrata35_B <- (dane_ser_B$tydzien3 - dane_ser_B$tydzien5) / dane_ser_B$tydzien3 * 100
+
+utrata_od_3_do_5 <- cbind(mean(utrata35_A), mean(utrata35_B))
+utrata_od_3_do_5 <- data.frame(utrata_od_3_do_5)
+colnames(utrata_od_3_do_5) <- c('typ "A"', 'typ "B"')
+
+kable(utrata_od_3_do_5, caption = 'Średnia procentowa utrata wody między 3 a 5 tygodniem dojrzewania sera', align = "c")
+
+
+```
+
+## Dodatkowe cele badawcze
+
+### Czy występują istotne statystycznie różnice między serem typu "A" oraz serem typu "B" w poszczególnych tygodniach?
+
+Dane dla sera typu "A" oraz typu "B" pochodzą z dwóch niezależnych prób, co oznacza, że pomiary w jednej grupie nie są w żaden sposób powiązane z pomiarami w drugiej grupie.
+
+\newpage
+
+**Sformułowanie problemu w postaci hipotez**
+
+$H_0$: mediany zawartości wody w serach "A" i "B" są równe w tygodniu $i$
+
+$H_1$: mediany zawartości wody w serach "A" i "B" są różne w tygodniu $i$
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $Me_{A_i} = Me_{B_i}$ 
+
+$H_1$: $Me_{A_i} \not= Me_{B_i}$ 
+
+```{r echo=FALSE, warning=FALSE}
+ab0 <- dane[,c(1,4)]
+ab3 <- dane[,c(2,4)]
+ab5 <- dane[,c(3,4)]
+
+ab0$typ_sera <- as.factor(ab0$typ_sera)
+ab3$typ_sera <- as.factor(ab3$typ_sera)
+ab5$typ_sera <- as.factor(ab5$typ_sera)
+
+# testy median
+m0_p <- pvalue(median_test(tydzien0 ~ typ_sera, data = ab0))
+m3_p <- pvalue(median_test(tydzien3 ~ typ_sera, data = ab3))
+m5_p <- pvalue(median_test(tydzien5 ~ typ_sera, data = ab5))
+
+# testy sumy rang Wilcoxona 
+w0_p <- wilcox.test(tydzien0 ~ typ_sera, data = ab0)$p.value
+w3_p <- wilcox.test(tydzien3 ~ typ_sera, data = ab3)$p.value
+w5_p <- wilcox.test(tydzien5 ~ typ_sera, data = ab5)$p.value
+
+```
+
+**Przeprowadzony test**: Test mediany (test Mooda) - `median_test`
+
+1. w tygodniu 0
+
+  - otrzymana $p$-wartość: `r m0_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: mediany zawartości wody w serach typu "A" oraz "B" nie różnią się w tygodniu 0
+
+2. w tygodniu 3
+
+  - otrzymana $p$-wartość: `r m3_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: mediany zawartości wody w serach typu "A" oraz "B" nie różnią się w tygodniu 3
+
+3. w tygodniu 5
+
+  - otrzymana $p$-wartość: `r m5_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: mediany zawartości wody w serach typu "A" oraz "B" nie różnią się w tygodniu 5
+  
+\newpage
+  
+**Sformułowanie problemu w postaci hipotez**
+
+$H_0$: rozkłady zawartości wody w serach "A" i "B" są identyczne w tygodniu $i$
+
+$H_1$: rozkłady zawartości wody w serach "A" i "B" są różne w tygodniu $i$
+
+**Zapis matematyczny hipotez**
+
+$H_0$: $F_{A_i} = G_{B_i}$ 
+
+$H_1$: $F_{A_i} \not= G_{B_i}$ 
+
+**Przeprowadzony test**: Test sumy rang Wilcoxona - `wilcox.test`
+
+1. w tygodniu 0
+
+  - otrzymana $p$-wartość: `r w0_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: rozkłady zawartości wody w serach typu "A" oraz "B" nie różnią się w tygodniu 0
+
+2. w tygodniu 3
+
+  - otrzymana $p$-wartość: `r w3_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: rozkłady zawartości wody w serach typu "A" oraz "B" nie różnią się w tygodniu 3
+
+3. w tygodniu 5
+
+  - otrzymana $p$-wartość: `r w5_p` > 0.05
+  
+  - decyzja: nie ma podstaw do odrzucenia $H_0$ 
+  
+  - wniosek: rozkłady zawartości wody w serach typu "A" oraz "B" nie różnią się w tygodniu 5
+
+\newpage
+
+# Wnioski
+
+1. Przeprowadzona analiza statystyczna wykazała, że w obu typach sera ("A" i "B") przechowywanie produktu prowadzi do statystycznie istotnych zmian w zawartości wody w czasie. Test Friedmana potwierdził istotne różnice rozkładów zawartości wody między tygodniami 0, 3 i 5 dla obu grup, co wskazuje na zmiany poziomu uwodnienia serów podczas przechowywania.
+Dodatkowo przeprowadzone testy Wilcoxona pozwoliły określić, między którymi tygodniami występują istotne statystycznie różnice: dla sera typu "A" były to różnice między tygodniem 0 a tygodniem 3 oraz między tygodniem 0 a tygodniem 5, natomiast dla sera typu "B" – istotność stwierdzono we wszystkich parach pomiarowych.
+Przeprowadzono również porównania parami przy użyciu testu Andersona–Darlinga, które wykazały istotne różnice pomiędzy wszystkimi punktami czasowymi dla sera typu "A". W przypadku sera typu "B" różnice pomiędzy tygodniem 3 a 5 nie były istotne statystycznie.
+
+2. Przeprowadzony test rangowanych znaków Wilcoxona dla prób zależnych (bez rozróżniania typu sera) wykazał, że zmiany zawartości wody między tygodniami 0 i 3 oraz między tygodniami 3 i 5 są istotne statystycznie, co potwierdza różnice w uwodnieniu sera w czasie.
+
+3. Analiza średnich procentowych spadków zawartości wody wskazuje, że po 3 tygodniach ser typu "A" traci przeciętnie około 7,7% wody, a po 5 tygodniach jest to już 11,4%. Natomiast ser typu "B" po 3 tygodniach od początku badania stracił około 6,6%, a po 5 tygodniach - 11,8%. W okresie między tygodniem 3 a 5 tempo odwodnienia w serze "B" było wyższe niż w serze "A".
+
+4. Dodatkowe porównania między typami sera w konkretnym tygodniu wykonane za pomocą testu mediany oraz testu Wilcoxona dla prób niezależnych nie wykazały istotnych różnic w zawartości wody. Oznacza to, że pomimo wyraźnej tendencji odwodnienia w czasie, nie stwierdzono istotnych różnic między typami sera w odpowiadających sobie punktach pomiarowych.
+
