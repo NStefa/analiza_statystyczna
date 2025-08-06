@@ -2,7 +2,7 @@
 
 ## Opis projektu
 
-Projekt został zrealizowany w ramach zaliczenia przedmiotu \*Statystyka nieparametryczna\*. Analizie poddano dane dotyczące \*dwóch rodzajów sera topionego (typ A i typ B)\*, dla których wykonano pomiary zawartości wody w \*trzech punktach czasowych\*: w tygodniu 0, tygodniu 3 oraz tygodniu 5.
+Projekt został zrealizowany w ramach zaliczenia przedmiotu *Statystyka nieparametryczna*. Analizie poddano dane dotyczące *dwóch rodzajów sera topionego (typ A i typ B)*, dla których wykonano pomiary zawartości wody w *trzech punktach czasowych*: w tygodniu 0, tygodniu 3 oraz tygodniu 5.
 
 Celem projektu było zweryfikowanie następujących hipotez:
 
@@ -22,7 +22,7 @@ W projekcie wykorzystano następujące nieparametryczne testy statystyczne:
 
 ## Narzędzia i biblioteki
 
-Analizy przeprowadzono w języku \*R\*, z wykorzystaniem następujących bibliotek:
+Analizy przeprowadzono w języku *R*, z wykorzystaniem następujących bibliotek:
 - `stats` 
 - `DescTools` 
 - `ggplot2` – wizualizacja danych i trendów
